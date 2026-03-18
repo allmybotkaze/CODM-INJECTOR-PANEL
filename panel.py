@@ -108,7 +108,7 @@ def token():
             if elapsed < COOLDOWN:
                 return jsonify({
                     "status":"cooldown",
-                    "redirect":"https://kazehayamodz-main-page.onrender.com"
+                    "redirect":"https://kazehayamodz-main-page-zua8.onrender.com"
                 })
 
     # GENERATE TOKEN
