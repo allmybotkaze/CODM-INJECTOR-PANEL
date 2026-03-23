@@ -14,7 +14,7 @@ COOLDOWN = 120           # anti-spam
 KEY_LIMIT = 120         
 
 # ❗ I-PASTE DITO YUNG URL NA NAKUHA NATIN SA GOOGLE SHEETS
-SHEETS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbzU7JO0eziv1-pP6UAPTsD_qf5niJkwxYFr8NcG7ORLyfJYjFRz1chU0D2sClZV0oj98A/exec"
+SHEETS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbxGXLrkS4xKlzG6B9UOhl-pQufsFrgPGY6PSkY2W6AyJm_iQZlDR7CL-cKKJ76d6CEsDQ/exec"
 
 TELEGRAM_BOT_TOKEN = os.getenv("BOT_TOKEN")
 OWNER_ID = os.getenv("OWNER_ID")
