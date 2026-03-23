@@ -9,7 +9,7 @@ CORS(app)
 # ======================
 # 1. MONGO DB CONFIGURATION
 # ======================
-MONGO_URI = "mongodb+srv://KAZEHAYAMODZ:Kaze828@cluster0.uxadnqx.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+MONGO_URI = "mongodb+srv://KAZEHAYAMODZ:<db_password>@cluster0.uxadnqx.mongodb.net/?appName=Cluster0"
 client = MongoClient(MONGO_URI)
 db_mongo = client["KAZE_DATABASE"]
 keys_col = db_mongo["keys"]
