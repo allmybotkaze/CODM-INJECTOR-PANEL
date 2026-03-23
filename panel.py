@@ -38,24 +38,31 @@ def save_db():
 # ======================
 # GOOGLE SHEETS SYNC
 # ======================
-def sync_to_sheets(key, device, status, expiry_timestamp):
+def sync_from_sheets():
     if not SHEETS_WEBHOOK_URL: return
     try:
-        expiry_str = time.ctime(expiry_timestamp) if expiry_timestamp else "N/A"
-        payload = {
-            "key": key,
-            "device": device or "N/A",
-            "status": status,
-            "expiry": expiry_str
-        }
-        # Ito ang magpapadala ng data sa Google Sheet mo
-        requests.post(SHEETS_WEBHOOK_URL, json=payload, timeout=8)
-    except: pass
-
+        response = requests.get(SHEETS_WEBHOOK_URL, timeout=10)
+        rows = response.json()
+        # Row 0 is header, so start from Row 1
+        for row in rows[1:]:
+            key_name = row[1]   # Key column
+            device_id = row[2]  # Device column
+            status = row[3]     # Status column
+            
+            # I-balik sa database.json ang mga active keys
+            if key_name not in db["keys"]:
+                db["keys"][key_name] = {
+                    "expiry": time.time() + 43200, # Bigyan ng default 12h or base sa record
+                    "device": None if device_id == "N/A" else device_id,
+                    "revoked": False if status != "REVOKED" else True
+                }
+        save_db()
+        print("✅ Keys recovered from Google Sheets!")
+    except:
+        print("❌ Sync failed")
 # ======================
 # TELEGRAM ALERT
-# ======================
-def send_telegram_alert(message: str):
+# ===========
     if not TELEGRAM_BOT_TOKEN or not OWNER_ID: return
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": OWNER_ID, "text": message, "parse_mode": "Markdown"}
@@ -187,5 +194,6 @@ def stats():
     })
 
 if __name__ == "__main__":
+    sync_from_sheets() # <--- DITO NIYA BABASAHIN YUNG WORKSHEET PAG-ON MO
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
