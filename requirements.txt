@@ -1,6 +1,4 @@
 flask
 flask-cors
-pymongo[srv]
 gunicorn
 requests
-certifi
