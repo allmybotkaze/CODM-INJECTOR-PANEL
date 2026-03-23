@@ -196,27 +196,32 @@ def verify():
     cleanup()
     key = request.args.get("key")
     device = request.args.get("device")
+    
     if not key or key not in db["keys"]:
         return "invalid"
+    
     data = db["keys"][key]
+    
     if data.get("revoked"):
-        send_telegram_alert(f"🚫 *Key Revoked*\nKey: `{key}`\nDevice: `{device}`")
         return "revoked"
+        
     if time.time() > data["expiry"]:
-        send_telegram_alert(f"⚠️ *Key Expired*\nKey: `{key}`\nDevice: `{device}`")
         return "expired"
+
+    # Kunin ang expiry timestamp (gawing integer para malinis)
+    expiry_ts = int(data["expiry"])
+
     if data["device"] is None:
         data["device"] = device
         data["login_time"] = time.time()
         save_db()
-        remaining = int(data["expiry"] - time.time())
-        send_telegram_alert(f"✓ *Key Used*\nKey: `{key}`\nDevice: `{device}`\nExpires in: `{remaining}s`")
-        return "valid"
+        # I-return ang status KASAMA ang expiry timestamp
+        return f"valid|{expiry_ts}"
+
     if data["device"] == device:
-        remaining = int(data["expiry"] - time.time())
-        send_telegram_alert(f"✓ *Key Used*\nKey: `{key}`\nDevice: `{device}`\nExpires in: `{remaining}s`")
-        return "valid"
-    send_telegram_alert(f"🔒 *Key Locked - Device Mismatch*\nKey: `{key}`\nDevice Attempt: `{device}`\nAssigned Device: `{data['device']}`")
+        # I-return din dito ang status KASAMA ang expiry timestamp
+        return f"valid|{expiry_ts}"
+
     return "locked"
 
 # ======================
