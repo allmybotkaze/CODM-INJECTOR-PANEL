@@ -9,12 +9,12 @@ CORS(app)
 # CONFIGURATION
 # ======================
 DATA_FILE = "database.json"
-TOKEN_EXPIRY = 300
+TOKEN_EXPIRY = 5
 COOLDOWN = 120
 KEY_LIMIT = 120
 
 # ❗ I-PASTE DITO YUNG NASA SCREENSHOT 202149
-SHEETS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbzU7J00eziv1-pP6UAPTsD_qf5niJkwxYFr8NcG7ORLyfJYjFRz1chU0D2sCIZV0oj98A/exec"
+SHEETS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbyMPXyWqdIV5BPiW8RSKSLRphNPpxrv5SjKMy65pbTkjIZYZY13wsH14u_gPXD4uB7u/exec"
 
 TELEGRAM_BOT_TOKEN = os.getenv("BOT_TOKEN")
 OWNER_ID = os.getenv("OWNER_ID")
