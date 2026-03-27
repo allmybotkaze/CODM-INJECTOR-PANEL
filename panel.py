@@ -15,8 +15,8 @@ CORS(app)
 # CONSTANTS
 # ======================
 TOKEN_EXPIRY = 5       # seconds for token expiry
-COOLDOWN = 43200           # anti-spam cooldown
-KEY_LIMIT = 43200         # seconds before same IP can generate another key
+COOLDOWN =            # anti-spam cooldown
+KEY_LIMIT = 120         # seconds before same IP can generate another key
 DATA_FILE = "database.json"
 
 TELEGRAM_BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -143,7 +143,7 @@ def getkey():
     if token_id not in db["tokens"]:
         return jsonify({
             "status": "error",
-            "message": "Nice try! Bypass detected balik sa main page you can gen again after 12h Token expired"
+            "message": "Token expired. Please generate again."
         }), 403
 
     token_data = db["tokens"][token_id]
@@ -155,7 +155,7 @@ def getkey():
         if wait > 0:
             return jsonify({
                 "status": "wait",
-                "message": f"Nice try! Bypass detected balik sa main page you can gen again after 12h"
+                "message": f"Please wait {wait}s before generating again"
             }), 403
 
     # ðŸ”‘ KEY PREFIX
@@ -272,5 +272,3 @@ def stats():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
-
-    
