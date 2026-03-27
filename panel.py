@@ -14,7 +14,7 @@ CORS(app)
 # ======================
 # CONSTANTS (Updated)
 # ======================
-TOKEN_EXPIRY = 300       # Ginawa nating 5 mins para hindi sila ma-expire agad habang nasa gplinks
+TOKEN_EXPIRY = 1000       # Ginawa nating 5 mins para hindi sila ma-expire agad habang nasa gplinks
 COOLDOWN = 60            
 KEY_LIMIT = 43200        # 12 HOURS (Para hindi sila makakuha ng bagong key agad-agad)
 DATA_FILE = "database.json"
