@@ -12,48 +12,44 @@ app = Flask(__name__)
 CORS(app)
 
 # ======================
-# CONSTANTS (Updated)
+# CONFIG
 # ======================
-TOKEN_EXPIRY = 1000       # Ginawa nating 5 mins para hindi sila ma-expire agad habang nasa gplinks
-COOLDOWN = 60            
-KEY_LIMIT = 43200        # 12 HOURS (Para hindi sila makakuha ng bagong key agad-agad)
+TOKEN_EXPIRY = 1000      # 16.6 minutes para relax ang user sa gplinks
+COOLDOWN = 60            # 1 minute cooldown para sa token request
+KEY_LIMIT = 43200        # 12 HOURS (Same key for the same IP)
 DATA_FILE = "database.json"
 
 TELEGRAM_BOT_TOKEN = os.getenv("BOT_TOKEN")
 OWNER_ID = os.getenv("OWNER_ID")
 
 # ======================
-# LOAD DB
+# DATABASE INITIALIZATION
 # ======================
-if os.path.exists(DATA_FILE):
-    with open(DATA_FILE, "r") as f:
-        db = json.load(f)
-else:
-    db = {
-        "keys": {},
-        "tokens": {},
-        "ip_limit": {},
-        "cooldowns": {},
-        "ip_keys": {}  # DITO NATIN I-STORE ANG KEY PER IP
-    }
+def load_db():
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "r") as f:
+            data = json.load(f)
+            # Siguraduhin na nandito lahat ng keys para iwas Server Error
+            if "ip_keys" not in data: data["ip_keys"] = {}
+            if "keys" not in data: data["keys"] = {}
+            if "tokens" not in data: data["tokens"] = {}
+            if "ip_limit" not in data: data["ip_limit"] = {}
+            if "cooldowns" not in data: data["cooldowns"] = {}
+            return data
+    return {"keys": {}, "tokens": {}, "ip_limit": {}, "cooldowns": {}, "ip_keys": {}}
 
-# Siguraduhin na may "ip_keys" sa db kung luma na ang json mo
-if "ip_keys" not in db:
-    db["ip_keys"] = {}
+db = load_db()
 
 def save_db():
     with open(DATA_FILE, "w") as f:
         json.dump(db, f, indent=4)
 
-# ======================
-# HELPER: GET REAL IP (For Render)
-# ======================
 def get_ip():
-    # Sa Render, kailangan ang X-Forwarded-For para sa totoong IP ng user
+    # Fix para sa Render Proxy IP
     return request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
 
 # ======================
-# CLEANUP (Updated)
+# CLEANUP
 # ======================
 def cleanup():
     now = time.time()
@@ -61,77 +57,74 @@ def cleanup():
         if now - db["tokens"][t]["time"] > TOKEN_EXPIRY:
             del db["tokens"][t]
     
-    # Linisin ang IP limit kapag tapos na ang 12 hours
     for ip in list(db["ip_limit"].keys()):
         if now - db["ip_limit"][ip] > KEY_LIMIT:
             del db["ip_limit"][ip]
             if ip in db["ip_keys"]:
                 del db["ip_keys"][ip]
-
-# ... [Keep your convert_duration, home, and token functions as they are] ...
+    save_db()
 
 # ======================
-# GENERATE KEY (SECURE VERSION)
+# CORE FUNCTIONS
 # ======================
+def convert_duration(duration: str):
+    duration = duration.lower()
+    if duration.endswith("h"): return int(duration[:-1]) * 3600
+    if duration.endswith("d"): return int(duration[:-1]) * 86400
+    if duration == "lifetime": return 999999999
+    return 43200 # Default 12h
+
+@app.route("/")
+def home():
+    return "KAZE SERVER ONLINE 🚀"
+
+@app.route("/token")
+def token():
+    cleanup()
+    ip = get_ip()
+    now = time.time()
+    
+    if ip in db["cooldowns"]:
+        if now - db["cooldowns"][ip] < COOLDOWN:
+            return jsonify({"status": "cooldown", "redirect": "https://kazehayamodz-main-page-zua8.onrender.com"})
+    
+    token_id = str(uuid.uuid4())
+    db["tokens"][token_id] = {"ip": ip, "time": now}
+    db["cooldowns"][ip] = now
+    save_db()
+    return jsonify({"status": "success", "token": token_id})
+
 @app.route("/getkey")
 def getkey():
     cleanup()
     token_id = request.args.get("token")
     source = request.args.get("src", "site")
     duration = request.args.get("duration", "12h")
-    
     ip = get_ip()
     now = time.time()
 
-    # 1. SMART CHECK: Meron na ba siyang existing key para sa IP na ito?
-    # Kung nag-refresh ang user sa Chrome, ibigay lang ang lumang key.
+    # 1. SMART RESTORE (Anti-Refresh)
     if ip in db["ip_keys"]:
-        existing_key = db["ip_keys"][ip]
-        # I-verify kung valid pa ang key na ito
-        if existing_key in db["keys"] and now < db["keys"][existing_key]["expiry"]:
-            return jsonify({
-                "status": "success",
-                "key": existing_key,
-                "message": "Key restored (Refresh Protection)"
-            })
+        k = db["ip_keys"][ip]
+        if k in db["keys"] and now < db["keys"][k]["expiry"]:
+            return jsonify({"status": "success", "key": k, "restored": True})
 
-    # 2. TOKEN VALIDATION
+    # 2. TOKEN CHECK
     if not token_id or token_id not in db["tokens"]:
-        return jsonify({"status": "error", "message": "Invalid or Expired Token. Go back to main page."}), 403
+        return jsonify({"status": "error", "message": "Expired Token. Restart Process."}), 403
 
-    # 3. ANTI-SPAM (Wait for 12 hours before getting a TRULY NEW key)
-    if ip in db["ip_limit"]:
-        elapsed = now - db["ip_limit"][ip]
-        if elapsed < KEY_LIMIT:
-            # Dito, kung wala sa ip_keys pero nasa ip_limit, ibig sabihin may error o bypass
-            return jsonify({"status": "error", "message": "Limit reached. Try again later."}), 403
-
-    # 4. GENERATE NEW KEY
+    # 3. GENERATE
     prefix = "Kaze-" if source == "bot" else "KazeFreeKey-"
-    key = prefix + ''.join(random.choices(string.ascii_letters + string.digits, k=12))
+    new_key = prefix + ''.join(random.choices(string.ascii_letters + string.digits, k=12))
     
-    expiry_seconds = convert_duration(duration)
-
-    db["keys"][key] = {
-        "expiry": now + expiry_seconds,
-        "device": None,
-        "revoked": False,
-        "login_time": None
-    }
-
-    # 5. SAVE TO IP MEMORY
+    expiry_sec = convert_duration(duration)
+    db["keys"][new_key] = {"expiry": now + expiry_sec, "device": None, "revoked": False}
     db["ip_limit"][ip] = now
-    db["ip_keys"][ip] = key # I-bind ang key sa IP na ito
-
-    # remove used token
-    del db["tokens"][token_id]
+    db["ip_keys"][ip] = new_key
+    
+    if token_id in db["tokens"]: del db["tokens"][token_id]
     save_db()
-
-    return jsonify({
-        "status": "success",
-        "key": key,
-        "expires_in": expiry_seconds
-    })
+    return jsonify({"status": "success", "key": new_key, "expires_in": expiry_sec})
 
 # ======================
 # VERIFY KEY
