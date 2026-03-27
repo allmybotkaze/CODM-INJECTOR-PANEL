@@ -15,8 +15,8 @@ CORS(app)
 # CONSTANTS
 # ======================
 TOKEN_EXPIRY = 5       # seconds for token expiry
-COOLDOWN = 43200            # anti-spam cooldown
-KEY_LIMIT = 43200         # seconds before same IP can generate another key
+COOLDOWN = 120            # anti-spam cooldown
+KEY_LIMIT = 120         # seconds before same IP can generate another key
 DATA_FILE = "database.json"
 
 TELEGRAM_BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -89,7 +89,7 @@ def convert_duration(duration: str):
 # ======================
 @app.route("/")
 def home():
-    return "KAZE SERVER ONLINE ðŸš€"
+    return "KAZE SERVER ONLINE"
 
 # ======================
 # TOKEN
@@ -155,7 +155,7 @@ def getkey():
         if wait > 0:
             return jsonify({
                 "status": "wait",
-                "message": f"Bypass detected! Try again in 12 hours"
+                "message": f"Bypass detected! Try again in main page"
             }), 403
 
     # ðŸ”‘ KEY PREFIX
