@@ -155,7 +155,7 @@ def getkey():
         if wait > 0:
             return jsonify({
                 "status": "wait",
-                "message": f"Please wait {wait}s before generating again"
+                "message": f"Bypass detected! Try again in 12 hours"
             }), 403
 
     # ðŸ”‘ KEY PREFIX
