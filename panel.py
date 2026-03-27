@@ -15,8 +15,8 @@ CORS(app)
 # CONSTANTS
 # ======================
 TOKEN_EXPIRY = 5       # seconds for token expiry
-COOLDOWN =            # anti-spam cooldown
-KEY_LIMIT = 120         # seconds before same IP can generate another key
+COOLDOWN = 43200            # anti-spam cooldown
+KEY_LIMIT = 43200         # seconds before same IP can generate another key
 DATA_FILE = "database.json"
 
 TELEGRAM_BOT_TOKEN = os.getenv("BOT_TOKEN")
