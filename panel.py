@@ -6,47 +6,39 @@ import json
 import os
 import random
 import string
-import requests
+import requests  # telegram alerts
 
 app = Flask(__name__)
 CORS(app)
 
 # ======================
-# CONFIG
+# CONSTANTS
 # ======================
-TOKEN_EXPIRY = 1000      # 16.6 minutes para relax ang user sa gplinks
-COOLDOWN = 60            # 1 minute cooldown para sa token request
-KEY_LIMIT = 43200        # 12 HOURS (Same key for the same IP)
+TOKEN_EXPIRY = 5       # seconds for token expiry
+COOLDOWN = 43200           # anti-spam cooldown
+KEY_LIMIT = 43200         # seconds before same IP can generate another key
 DATA_FILE = "database.json"
 
 TELEGRAM_BOT_TOKEN = os.getenv("BOT_TOKEN")
-OWNER_ID = os.getenv("OWNER_ID")
+OWNER_ID = os.getenv("OWNER_ID")  # int chat_id of owner
 
 # ======================
-# DATABASE INITIALIZATION
+# LOAD DB
 # ======================
-def load_db():
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "r") as f:
-            data = json.load(f)
-            # Siguraduhin na nandito lahat ng keys para iwas Server Error
-            if "ip_keys" not in data: data["ip_keys"] = {}
-            if "keys" not in data: data["keys"] = {}
-            if "tokens" not in data: data["tokens"] = {}
-            if "ip_limit" not in data: data["ip_limit"] = {}
-            if "cooldowns" not in data: data["cooldowns"] = {}
-            return data
-    return {"keys": {}, "tokens": {}, "ip_limit": {}, "cooldowns": {}, "ip_keys": {}}
-
-db = load_db()
+if os.path.exists(DATA_FILE):
+    with open(DATA_FILE, "r") as f:
+        db = json.load(f)
+else:
+    db = {
+        "keys": {},
+        "tokens": {},
+        "ip_limit": {},
+        "cooldowns": {}
+    }
 
 def save_db():
     with open(DATA_FILE, "w") as f:
         json.dump(db, f, indent=4)
-
-def get_ip():
-    # Fix para sa Render Proxy IP
-    return request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
 
 # ======================
 # CLEANUP
@@ -56,75 +48,145 @@ def cleanup():
     for t in list(db["tokens"].keys()):
         if now - db["tokens"][t]["time"] > TOKEN_EXPIRY:
             del db["tokens"][t]
-    
     for ip in list(db["ip_limit"].keys()):
         if now - db["ip_limit"][ip] > KEY_LIMIT:
             del db["ip_limit"][ip]
-            if ip in db["ip_keys"]:
-                del db["ip_keys"][ip]
-    save_db()
 
 # ======================
-# CORE FUNCTIONS
+# TELEGRAM ALERT
+# ======================
+def send_telegram_alert(message: str):
+    if not TELEGRAM_BOT_TOKEN or not OWNER_ID:
+        return
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": OWNER_ID,
+        "text": message,
+        "parse_mode": "Markdown"
+    }
+    try:
+        requests.post(url, data=payload, timeout=5)
+    except:
+        pass
+
+# ======================
+# DURATION CONVERTER
 # ======================
 def convert_duration(duration: str):
     duration = duration.lower()
-    if duration.endswith("h"): return int(duration[:-1]) * 3600
-    if duration.endswith("d"): return int(duration[:-1]) * 86400
-    if duration == "lifetime": return 999999999
-    return 43200 # Default 12h
+    if duration.endswith("m"):
+        return int(duration[:-1]) * 60
+    if duration.endswith("h"):
+        return int(duration[:-1]) * 3600
+    if duration.endswith("d"):
+        return int(duration[:-1]) * 86400
+    if duration == "lifetime":
+        return 999999999
+    return 1800  # default 30 minutes
 
+# ======================
+# HOME
+# ======================
 @app.route("/")
 def home():
-    return "KAZE SERVER ONLINE 🚀"
+    return "KAZE SERVER ONLINE ðŸš€"
 
+# ======================
+# TOKEN
+# ======================
 @app.route("/token")
 def token():
     cleanup()
-    ip = get_ip()
+    ip = request.remote_addr
     now = time.time()
-    
-    if ip in db["cooldowns"]:
-        if now - db["cooldowns"][ip] < COOLDOWN:
-            return jsonify({"status": "cooldown", "redirect": "https://kazehayamodz-main-page-zua8.onrender.com"})
-    
+    source = request.args.get("src", "site")
+
+    # CHECK COOLDOWN ONLY IF IP ALREADY HAS ONE
+    if source != "bot":
+        if ip in db["cooldowns"]:
+            elapsed = now - db["cooldowns"][ip]
+            if elapsed < COOLDOWN:
+                return jsonify({
+                    "status":"cooldown",
+                    "redirect":"https://kazehayamodz-main-page-zua8.onrender.com"
+                })
+
+    # GENERATE TOKEN
     token_id = str(uuid.uuid4())
     db["tokens"][token_id] = {"ip": ip, "time": now}
-    db["cooldowns"][ip] = now
-    save_db()
-    return jsonify({"status": "success", "token": token_id})
 
+    save_db()
+    return jsonify({
+        "status":"success",
+        "token": token_id
+    })
+
+# ======================
+# GENERATE KEY
+# ======================
 @app.route("/getkey")
 def getkey():
-    cleanup()
+
     token_id = request.args.get("token")
     source = request.args.get("src", "site")
     duration = request.args.get("duration", "12h")
-    ip = get_ip()
+
     now = time.time()
 
-    # 1. SMART RESTORE (Anti-Refresh)
-    if ip in db["ip_keys"]:
-        k = db["ip_keys"][ip]
-        if k in db["keys"] and now < db["keys"][k]["expiry"]:
-            return jsonify({"status": "success", "key": k, "restored": True})
+    # â— STRICT TOKEN CHECK
+    if not token_id:
+        return jsonify({
+            "status": "error",
+            "message": "Missing token"
+        }), 403
 
-    # 2. TOKEN CHECK
-    if not token_id or token_id not in db["tokens"]:
-        return jsonify({"status": "error", "message": "Expired Token. Restart Process."}), 403
+    if token_id not in db["tokens"]:
+        return jsonify({
+            "status": "error",
+            "message": "Nice try! Bypass detected balik sa main page you can gen again after 12h Token expired"
+        }), 403
 
-    # 3. GENERATE
+    token_data = db["tokens"][token_id]
+    ip = token_data["ip"]
+
+    # ðŸ”’ Anti spam check
+    if ip in db["ip_limit"]:
+        wait = int(KEY_LIMIT - (now - db["ip_limit"][ip]))
+        if wait > 0:
+            return jsonify({
+                "status": "wait",
+                "message": f"Nice try! Bypass detected balik sa main page you can gen again after 12h"
+            }), 403
+
+    # ðŸ”‘ KEY PREFIX
     prefix = "Kaze-" if source == "bot" else "KazeFreeKey-"
-    new_key = prefix + ''.join(random.choices(string.ascii_letters + string.digits, k=12))
-    
-    expiry_sec = convert_duration(duration)
-    db["keys"][new_key] = {"expiry": now + expiry_sec, "device": None, "revoked": False}
+
+    key = prefix + ''.join(
+        random.choices(string.ascii_letters + string.digits, k=12)
+    )
+
+    expiry_seconds = convert_duration(duration)
+
+    db["keys"][key] = {
+        "expiry": now + expiry_seconds,
+        "device": None,
+        "revoked": False,
+        "login_time": None
+    }
+
+    # set IP cooldown
     db["ip_limit"][ip] = now
-    db["ip_keys"][ip] = new_key
-    
-    if token_id in db["tokens"]: del db["tokens"][token_id]
+
+    # remove used token
+    del db["tokens"][token_id]
+
     save_db()
-    return jsonify({"status": "success", "key": new_key, "expires_in": expiry_sec})
+
+    return jsonify({
+        "status": "success",
+        "key": key,
+        "expires_in": expiry_seconds
+    })
 
 # ======================
 # VERIFY KEY
@@ -210,4 +272,5 @@ def stats():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
     
